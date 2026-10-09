@@ -1,0 +1,130 @@
+
+#include <Arduino.h>
+#include "BluetoothSerial.h"
+
+BluetoothSerial SerialBT;
+
+// L298N pins
+const int ENA = 25;
+const int IN1 = 26;
+const int IN2 = 27;
+
+const int ENB = 14;
+const int IN3 = 32;
+const int IN4 = 33;
+
+// Motor speed: 0 to 255
+const int SPEED = 180;
+const int TURN_SPEED = 120;
+
+void setLeftMotor(int speed) {
+  speed = constrain(speed, -255, 255);
+
+  digitalWrite(IN1, speed > 0);
+  digitalWrite(IN2, speed < 0);
+  ledcWrite(ENA, abs(speed));
+}
+
+void setRightMotor(int speed) {
+  speed = constrain(speed, -255, 255);
+
+  digitalWrite(IN3, speed > 0);
+  digitalWrite(IN4, speed < 0);
+  ledcWrite(ENB, abs(speed));
+}
+
+void drive(int leftSpeed, int rightSpeed) {
+  setLeftMotor(leftSpeed);
+  setRightMotor(rightSpeed);
+}
+
+void stopCar() {
+  drive(0, 0);
+}
+
+void setup() {
+  Serial.begin(115200);
+
+  pinMode(IN1, OUTPUT);
+  pinMode(IN2, OUTPUT);
+  pinMode(IN3, OUTPUT);
+  pinMode(IN4, OUTPUT);
+
+  // Arduino-ESP32 core 3.x PWM API
+  ledcAttach(ENA, 1000, 8);
+  ledcAttach(ENB, 1000, 8);
+
+  stopCar();
+
+  // Bluetooth Classic SPP
+  SerialBT.begin("ESP32_RC_CAR");
+
+  Serial.println("Bluetooth RC Car Ready");
+  Serial.println("Pair with: ESP32_RC_CAR");
+}
+
+void loop() {
+  while (SerialBT.available()) {
+    char command = SerialBT.read();
+
+    // Ignore line endings sent by terminal apps
+    if (command == '\r' || command == '\n' ||
+        command == ' ') {
+      continue;
+    }
+
+    Serial.print("Command: ");
+    Serial.println(command);
+
+    switch (command) {
+      case 'F':
+      case 'f':
+        drive(SPEED, SPEED);
+        break;
+
+      case 'B':
+      case 'b':
+        drive(-SPEED, -SPEED);
+        break;
+
+      case 'L':
+      case 'l':
+        drive(-TURN_SPEED, TURN_SPEED);
+        break;
+
+      case 'R':
+      case 'r':
+        drive(TURN_SPEED, -TURN_SPEED);
+        break;
+
+      case 'G':
+      case 'g':
+        drive(SPEED - TURN_SPEED, SPEED);
+        break;
+
+      case 'I':
+      case 'i':
+        drive(SPEED, SPEED - TURN_SPEED);
+        break;
+
+      case 'H':
+      case 'h':
+        drive(-(SPEED - TURN_SPEED), -SPEED);
+        break;
+
+      case 'J':
+      case 'j':
+        drive(-SPEED, -(SPEED - TURN_SPEED));
+        break;
+
+      case 'S':
+      case 's':
+        stopCar();
+        break;
+
+      default:
+        Serial.println("Unknown command");
+        break;
+    }
+  }
+}
