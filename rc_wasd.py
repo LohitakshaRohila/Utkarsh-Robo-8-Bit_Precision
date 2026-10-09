@@ -1,75 +1,129 @@
 import socket
-import time
 import sys
+import time
 import termios
 import tty
 import select
 
-ESP_IP = "172.30.82.134"
+# ========================================
+# ESP32 CONFIGURATION
+# ========================================
+
+ESP_IP = "172.30.82.134"  # Replace with the IP printed by your ESP32
 PORT = 4210
 
 RATE_HZ = 20
+SEND_INTERVAL = 1.0 / RATE_HZ
+
+# ========================================
+# MOVEMENT SETTINGS
+# ========================================
 
 THROTTLE_SPEED = 70
 STEER_AMOUNT = 50
 
+# ========================================
+# UDP SETUP
+# ========================================
+
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+ESP_ADDRESS = (ESP_IP, PORT)
+
+# ========================================
+# TERMINAL KEYBOARD INPUT
+# ========================================
 
 def get_key():
-    """Read a key without waiting for Enter."""
-    if select.select([sys.stdin], [], [], 0)[0]:
+    readable, _, _ = select.select([sys.stdin], [], [], 0)
+
+    if readable:
         return sys.stdin.read(1).lower()
+
     return None
 
-old_settings = termios.tcgetattr(sys.stdin)
-last_packet = ""
-throttle = 0
-steering = 0
 
-print("\n=== RC Car Terminal Controller ===")
-print("W = Forward | S = Reverse")
-print("A = Left    | D = Right")
-print("X = Stop    | Q = Quit")
-print("Use combinations like W+A to move forward-left.")
-print("==================================\n")
+def send_command(throttle, steering):
+    message = f"T:{throttle},S:{steering}"
+    sock.sendto(message.encode(), ESP_ADDRESS)
 
-try:
-    tty.setcbreak(sys.stdin.fileno())
 
-    while True:
-        key = get_key()
+def main():
 
-        if key == "q":
-            break
+    old_terminal_settings = termios.tcgetattr(sys.stdin)
 
-        if key == "w":
-            throttle = THROTTLE_SPEED
-        elif key == "s":
-            throttle = -THROTTLE_SPEED
-        elif key == "a":
-            steering = -STEER_AMOUNT
-        elif key == "d":
-            steering = STEER_AMOUNT
-        elif key == "x":
-            throttle = 0
-            steering = 0
+    throttle = 0
+    steering = 0
 
-        packet = f"T:{throttle},S:{steering}"
+    last_sent = 0.0
 
-        sock.sendto(packet.encode(), (ESP_IP, PORT))
+    print("\n========== RC CAR CONTROLLER ==========")
+    print("W : Forward")
+    print("S : Reverse")
+    print("A : Turn left")
+    print("D : Turn right")
+    print("SPACE : Stop")
+    print("Q : Quit")
+    print("=======================================\n")
+    print("Starting controller...\n")
 
-        if packet != last_packet:
-            print(f"\rThrottle: {throttle:>4} | Steering: {steering:>4}   ")
-            last_packet = packet
+    try:
+        tty.setcbreak(sys.stdin.fileno())
 
-        time.sleep(1 / RATE_HZ)
+        while True:
 
-finally:
-    termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
+            key = get_key()
 
-    for _ in range(3):
-        sock.sendto(b"STOP", (ESP_IP, PORT))
-        time.sleep(0.02)
+            if key == "q":
+                break
 
-    sock.close()
-    print("\nRC controller stopped.")
+            elif key == "w":
+                throttle = THROTTLE_SPEED
+                steering = 0
+
+            elif key == "s":
+                throttle = -THROTTLE_SPEED
+                steering = 0
+
+            elif key == "a":
+                throttle = 0
+                steering = -STEER_AMOUNT
+
+            elif key == "d":
+                throttle = 0
+                steering = STEER_AMOUNT
+
+            elif key == " ":
+                throttle = 0
+                steering = 0
+
+            now = time.monotonic()
+
+            if now - last_sent >= SEND_INTERVAL:
+                send_command(throttle, steering)
+                last_sent = now
+
+                print(
+                    f"\rThrottle: {throttle:4d} | "
+                    f"Steering: {steering:4d}    ",
+                    end="",
+                    flush=True
+                )
+
+            time.sleep(0.002)
+
+    except KeyboardInterrupt:
+        print("\nInterrupted.")
+
+    finally:
+        termios.tcsetattr(
+            sys.stdin,
+            termios.TCSADRAIN,
+            old_terminal_settings
+        )
+
+        sock.close()
+        print("\nController exited.")
+
+
+if __name__ == "__main__":
+    main()
