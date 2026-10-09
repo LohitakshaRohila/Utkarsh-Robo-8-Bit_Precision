@@ -1,6 +1,9 @@
 import socket
-import pygame
 import time
+import sys
+import termios
+import tty
+import select
 
 ESP_IP = "172.30.82.134"
 PORT = 4210
@@ -12,74 +15,61 @@ STEER_AMOUNT = 50
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-pygame.init()
+def get_key():
+    """Read a key without waiting for Enter."""
+    if select.select([sys.stdin], [], [], 0)[0]:
+        return sys.stdin.read(1).lower()
+    return None
 
-screen = pygame.display.set_mode((400, 150))
-pygame.display.set_caption("RC Car - WASD to Drive")
-
-clock = pygame.time.Clock()
-
-running = True
+old_settings = termios.tcgetattr(sys.stdin)
 last_packet = ""
+throttle = 0
+steering = 0
+
+print("\n=== RC Car Terminal Controller ===")
+print("W = Forward | S = Reverse")
+print("A = Left    | D = Right")
+print("X = Stop    | Q = Quit")
+print("Use combinations like W+A to move forward-left.")
+print("==================================\n")
 
 try:
-    while running:
+    tty.setcbreak(sys.stdin.fileno())
 
-        for event in pygame.event.get():
+    while True:
+        key = get_key()
 
-            if event.type == pygame.QUIT:
-                running = False
+        if key == "q":
+            break
 
-        keys = pygame.key.get_pressed()
-
-        throttle = 0
-        steering = 0
-
-        # Forward and reverse
-        if keys[pygame.K_w] and not keys[pygame.K_s]:
+        if key == "w":
             throttle = THROTTLE_SPEED
-
-        elif keys[pygame.K_s] and not keys[pygame.K_w]:
+        elif key == "s":
             throttle = -THROTTLE_SPEED
-
-        # Left and right
-        if keys[pygame.K_a] and not keys[pygame.K_d]:
+        elif key == "a":
             steering = -STEER_AMOUNT
-
-        elif keys[pygame.K_d] and not keys[pygame.K_a]:
+        elif key == "d":
             steering = STEER_AMOUNT
+        elif key == "x":
+            throttle = 0
+            steering = 0
 
         packet = f"T:{throttle},S:{steering}"
 
-        # Send commands continuously.
         sock.sendto(packet.encode(), (ESP_IP, PORT))
 
-        # Print only when the command changes.
         if packet != last_packet:
-            print("Sending:", packet)
+            print(f"\rThrottle: {throttle:>4} | Steering: {steering:>4}   ")
             last_packet = packet
 
-        # Update the controller display.
-        screen.fill((30, 30, 30))
-
-        font = pygame.font.Font(None, 30)
-        text = font.render(
-            f"Throttle: {throttle} | Steering: {steering}",
-            True,
-            (255, 255, 255)
-        )
-
-        screen.blit(text, (15, 50))
-
-        pygame.display.flip()
-
-        clock.tick(RATE_HZ)
+        time.sleep(1 / RATE_HZ)
 
 finally:
-    # Send several stop packets in case one is lost.
+    termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
+
     for _ in range(3):
         sock.sendto(b"STOP", (ESP_IP, PORT))
         time.sleep(0.02)
 
     sock.close()
-    pygame.quit()
+    print("\nRC controller stopped.")
