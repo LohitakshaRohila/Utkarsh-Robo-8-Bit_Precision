@@ -1,6 +1,8 @@
 #define CUSTOM_SETTINGS
 #define INCLUDE_GAMEPAD_MODULE
 
+#include "soc/soc.h"
+#include "soc/rtc_cntl_reg.h"
 #include <DabbleESP32.h>
 
 // MOTOR PINS
@@ -17,8 +19,8 @@ const int IN4 = 13;
 
 // ULTRASONIC PINS
 
-const int TRIG_LEFT = 4;
-const int ECHO_LEFT = 18;
+const int TRIG_LEFT = 34;
+const int ECHO_LEFT = 35;
 
 const int TRIG_CENTER = 5;
 const int ECHO_CENTER = 19;
@@ -42,6 +44,7 @@ float rightDistance = -1;
 // SETUP
 
 void setup() {
+  WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);
   Serial.begin(115200);
 
   pinMode(ENA, OUTPUT);
