@@ -8,14 +8,14 @@ const int ENA = 25;
 const int IN1 = 26;
 const int IN2 = 27;
 
-const int ENB = 14;
-const int IN3 = 32;
-const int IN4 = 33;
+const int ENB = 33;
+const int IN3 = 14;
+const int IN4 = 13;
 
 // PWM settings
 const int PWM_FREQ = 5000;
 const int PWM_RESOLUTION = 8;  // 0-255
-const int MOTOR_SPEED = 180;   // PWM value: 180/255
+const int MOTOR_SPEED = 200;   // PWM value: 200/255
 
 // ESP32 PWM channels
 const int CHANNEL_A = 0;
